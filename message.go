@@ -28,16 +28,19 @@ func InitMessage(node *Node) Message {
 func (msg *Message) Send(wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	conn, err := net.Dial("tcp", msg.Headers["to"])
-	if err != nil {
-		log.Printf("Error: can not connect to %s\n", msg.Headers["to"])
-	}
-	defer conn.Close()
-
 	json_msg, err := json.Marshal(*msg)
 	if err != nil {
 		log.Println("Error: can't marshal message", msg)
+		return
 	}
+
+	conn, err := net.Dial("tcp", msg.Headers["to"])
+	if err != nil {
+		log.Printf("Error: can not connect to %s\n", msg.Headers["to"])
+		return
+	}
+	defer conn.Close()
+
 	log.Printf("message sent: %s", msg)
 	conn.Write(json_msg)
 }
