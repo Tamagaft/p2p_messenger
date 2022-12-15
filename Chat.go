@@ -1,5 +1,6 @@
 package main
 
 type Chat struct {
-	Name string
+	Name  string
+	Users []string
 }

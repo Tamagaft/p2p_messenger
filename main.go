@@ -48,6 +48,7 @@ func main() {
 			splited := strings.Split(userInput, " ")
 			switch splited[0] {
 			case "/exit":
+				node.DisconnectionMessages()
 				os.Exit(0)
 			case "/cs":
 				node.ConnectTo(splited[1:])

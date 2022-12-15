@@ -92,7 +92,7 @@ func (node *Node) ResendToChat(msg *Message, fromIp string) {
 		if e == makeAddress(fromIp) {
 			continue
 		}
-		if c != node.ActiveChat {
+		if c.Name != node.ActiveChat.Name {
 			continue
 		}
 		msg.Headers["to"] = e.Get()
@@ -113,7 +113,7 @@ func (node *Node) SendMessageToChat(userInput string) {
 		return
 	}
 	for i, c := range node.Connections {
-		if c != node.ActiveChat {
+		if c.Name != node.ActiveChat.Name {
 			continue
 		}
 		msg := InitMessage(node)
@@ -130,6 +130,11 @@ func (node *Node) JoinChat(chat []string) {
 	newChat := chat[0]
 	node.ActiveChat = Chat{Name: newChat}
 	node.SendChat()
+}
+
+func (node *Node) RemoveConnection(ip string) {
+	adr := makeAddress(ip)
+	delete(node.Connections, adr)
 }
 
 func (node *Node) SendChat() {
@@ -149,6 +154,21 @@ func (node *Node) SendChat() {
 
 		wg.Add(1)
 		go msg.Send(&wg)
+	}
+	wg.Wait()
+}
+
+func (node *Node) DisconnectionMessages() {
+	var wg sync.WaitGroup
+	msg := InitMessage(node)
+
+	for ip := range node.Connections {
+		msg.Headers["to"] = ip.Get()
+		msg.Headers["type"] = strconv.Itoa(int(MESSAGE_TYPE_STOP_CONNECTION))
+		msg.Headers["from"] = node.Address.Get()
+
+		wg.Add(1)
+		msg.Send(&wg)
 	}
 	wg.Wait()
 }
@@ -236,9 +256,10 @@ func handleConnection(node *Node, conn net.Conn) {
 		var newConnectionChat Chat
 		err = json.Unmarshal([]byte(msg.Data), &newConnectionChat)
 		if err != nil {
-			log.Printf("Error: Unable to unmarshal response %s from %s\n%s", message, msg.Headers["from"], err)
+			log.Printf("Error: Unable to unmarshal chat in response %s from %s\n%s", message, msg.Headers["from"], err)
 		}
 		node.AlterConnectionsChat(msgOriginIp, newConnectionChat)
+	case MESSAGE_TYPE_STOP_CONNECTION:
+		node.RemoveConnection(msgOriginIp)
 	}
-
 }
