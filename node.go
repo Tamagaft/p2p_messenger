@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strconv"
 	"sync"
 
 	"fyne.io/fyne/v2"
@@ -36,7 +35,7 @@ func (node *Node) GetConnections() string {
 		return "no connections"
 	}
 	for server := range node.Connections {
-		ret += fmt.Sprintf("%d: %s\n", i, server.Get())
+		ret += fmt.Sprintf("%d: %s\n", i, server.GetString())
 		i++
 	}
 	return ret
@@ -49,23 +48,22 @@ func (node *Node) GetConnectionsChat() string {
 		return "no connections"
 	}
 	for server, chat := range node.Connections {
-		ret += fmt.Sprintf("%d: %s: %s\n", i, server.Get(), chat.Name)
+		ret += fmt.Sprintf("%d: %s: %s\n", i, server.GetString(), chat.Name)
 		i++
 	}
 	return ret
 }
 
-func (node *Node) AlterConnectionsChat(ip string, chat Chat) {
-	nodeAddress := makeAddress(ip)
-	node.Connections[nodeAddress] = chat
+func (node *Node) AlterConnectionsChat(nodeIp Address, chat Chat) {
+	node.Connections[nodeIp] = chat
 }
 
 func (node *Node) ConnectTo(addresses []string) {
 	var wg sync.WaitGroup
 	msg := InitMessage(node)
 	for _, e := range addresses {
-		msg.Headers["to"] = e
-		msg.Headers["type"] = strconv.Itoa(int(MESSAGE_TYPE_CONNECTION))
+		msg.Headers.To = makeAddress(e)
+		msg.Headers.Type = MESSAGE_TYPE_CONNECTION
 		chatJson, err := node.MarshalChat()
 		if err != nil {
 			log.Print(err.Error())
@@ -86,16 +84,16 @@ func (node *Node) MarshalChat() (string, error) {
 	return string(chatJson), nil
 }
 
-func (node *Node) ResendToChat(msg *Message, fromIp string) {
+func (node *Node) ResendToChat(msg *Message, fromIp Address) {
 	var wg sync.WaitGroup
 	for e, c := range node.Connections {
-		if e == makeAddress(fromIp) {
+		if e == fromIp {
 			continue
 		}
 		if c.Name != node.ActiveChat.Name {
 			continue
 		}
-		msg.Headers["to"] = e.Get()
+		msg.Headers.To = e
 		wg.Add(1)
 		go msg.Send(&wg)
 	}
@@ -117,8 +115,8 @@ func (node *Node) SendMessageToChat(userInput string) {
 			continue
 		}
 		msg := InitMessage(node)
-		msg.Headers["to"] = i.Get()
-		msg.Headers["type"] = strconv.Itoa(int(MESSAGE_TYPE_TEXT))
+		msg.Headers.To = i
+		msg.Headers.Type = MESSAGE_TYPE_TEXT
 		msg.Data = userInput
 		wg.Add(1)
 		go msg.Send(&wg)
@@ -132,17 +130,16 @@ func (node *Node) JoinChat(chat []string) {
 	node.SendChat()
 }
 
-func (node *Node) RemoveConnection(ip string) {
-	adr := makeAddress(ip)
-	delete(node.Connections, adr)
+func (node *Node) RemoveConnection(ip Address) {
+	delete(node.Connections, ip)
 }
 
 func (node *Node) SendChat() {
 	var wg sync.WaitGroup
 	for address := range node.Connections {
 		msg := InitMessage(node)
-		msg.Headers["to"] = address.Get()
-		msg.Headers["type"] = strconv.Itoa(MESSAGE_TYPE_CHAT_CHANGE)
+		msg.Headers.To = address
+		msg.Headers.Type = MESSAGE_TYPE_CHAT_CHANGE
 
 		chatJson, err := node.MarshalChat()
 		if err != nil {
@@ -163,9 +160,9 @@ func (node *Node) DisconnectionMessages() {
 	msg := InitMessage(node)
 
 	for ip := range node.Connections {
-		msg.Headers["to"] = ip.Get()
-		msg.Headers["type"] = strconv.Itoa(int(MESSAGE_TYPE_STOP_CONNECTION))
-		msg.Headers["from"] = node.Address.Get()
+		msg.Headers.To = ip
+		msg.Headers.Type = MESSAGE_TYPE_STOP_CONNECTION
+		msg.Headers.From = node.Address
 
 		wg.Add(1)
 		msg.Send(&wg)
@@ -173,12 +170,12 @@ func (node *Node) DisconnectionMessages() {
 	wg.Wait()
 }
 
-func (node *Node) SendChatTo(ip string) {
+func (node *Node) SendChatTo(ip Address) {
 	var wg sync.WaitGroup
 	msg := InitMessage(node)
-	msg.Headers["to"] = ip
-	msg.Headers["type"] = strconv.Itoa(int(MESSAGE_TYPE_CHAT_CHANGE))
-	msg.Headers["from"] = node.Address.Get()
+	msg.Headers.To = ip
+	msg.Headers.Type = MESSAGE_TYPE_CHAT_CHANGE
+	msg.Headers.From = node.Address
 
 	chatJson, err := node.MarshalChat()
 	if err != nil {
@@ -192,7 +189,7 @@ func (node *Node) SendChatTo(ip string) {
 	wg.Wait()
 }
 func handleServer(node *Node) {
-	listener, err := net.Listen("tcp", node.Address.Get())
+	listener, err := net.Listen("tcp", node.Address.GetString())
 	if err != nil {
 		log.Fatalf("Failed to start listener on address %s:%s", node.Address.IPv4, node.Address.Port)
 	}
@@ -233,7 +230,7 @@ func handleConnection(node *Node, conn net.Conn) {
 		return
 	}
 
-	msgOriginIp := msg.Headers["from"]
+	msgOriginIp := msg.Headers.From
 
 	switch msgType {
 	case MESSAGE_TYPE_TEXT:
@@ -244,19 +241,19 @@ func handleConnection(node *Node, conn net.Conn) {
 		}
 	case MESSAGE_TYPE_CONNECTION:
 		var chat Chat
-		a := makeAddress(msgOriginIp)
+		a := msgOriginIp
 		err := json.Unmarshal([]byte(msg.Data), &chat)
 		if err != nil {
 			log.Printf("Unable to unmarshal chat %s", msg)
 		}
-		log.Printf("got connection from %s, saved as %s", msg.Headers["from"], msgOriginIp)
+		log.Printf("got connection from %s, saved as %s", msg.Headers.From, msgOriginIp)
 		node.Connections[a] = chat
-		node.SendChatTo(msg.Headers["from"])
+		node.SendChatTo(msg.Headers.From)
 	case MESSAGE_TYPE_CHAT_CHANGE:
 		var newConnectionChat Chat
 		err = json.Unmarshal([]byte(msg.Data), &newConnectionChat)
 		if err != nil {
-			log.Printf("Error: Unable to unmarshal chat in response %s from %s\n%s", message, msg.Headers["from"], err)
+			log.Printf("Error: Unable to unmarshal chat in response %s from %s\n%s", message, msg.Headers.From, err)
 		}
 		node.AlterConnectionsChat(msgOriginIp, newConnectionChat)
 	case MESSAGE_TYPE_STOP_CONNECTION:

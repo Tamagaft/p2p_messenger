@@ -3,25 +3,22 @@ package main
 import (
 	"crypto/sha512"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 )
 
 type Message struct {
-	Headers map[string]string
+	Headers Header
 	Data    string
 }
 
 func InitMessage(node *Node) Message {
-	headers := make(map[string]string)
-	headers["from"] = node.Address.Get()
+	headers := Header{}
+	headers.From = node.Address
 	msg := Message{Headers: headers}
-	currentTime := time.Now()
-	msg.Headers["time"] = strconv.Itoa(int(currentTime.UnixMicro()))
+	msg.Headers.Time = time.Now()
 	return msg
 }
 
@@ -34,9 +31,9 @@ func (msg *Message) Send(wg *sync.WaitGroup) {
 		return
 	}
 
-	conn, err := net.Dial("tcp", msg.Headers["to"])
+	conn, err := net.Dial("tcp", msg.Headers.To.GetString())
 	if err != nil {
-		log.Printf("Error: can not connect to %s\n", msg.Headers["to"])
+		log.Printf("Error: can not connect to %s\n", msg.Headers.To)
 		return
 	}
 	defer conn.Close()
@@ -46,17 +43,14 @@ func (msg *Message) Send(wg *sync.WaitGroup) {
 }
 
 func (msg *Message) GetType() (int, error) {
-	msgType, ok := msg.Headers["type"]
-	if !ok {
-		return 0, fmt.Errorf("no type")
-	}
-	retType, _ := strconv.Atoi(msgType)
-	return retType, nil
+	msgType := msg.Headers.Type
+
+	return msgType, nil
 }
 
 func (m *Message) Hash() string {
 	hasher := sha512.New()
-	hasher.Write([]byte(m.Headers["from"] + "=>" + m.Headers["to"] + " at " + m.Headers["time"] + " text: " + m.Data))
+	hasher.Write([]byte(m.Headers.From.GetString() + "=>" + m.Headers.To.GetString() + " at " + m.Headers.Time.Format("2006-01-02 15:04:05") + " text: " + m.Data))
 	return string(hasher.Sum(nil))
 }
 
@@ -64,12 +58,7 @@ func (m *Message) Outdated() bool {
 	now := time.Now()
 	period := MESSAGE_AUTDATED
 
-	unixMicroTime, err := strconv.Atoi(m.Headers["time"])
-	if err != nil {
-		log.Printf("can not get time from message: %s\n", m)
-	}
+	msgTime := m.Headers.Time
 
-	t := time.UnixMicro(int64(unixMicroTime))
-
-	return t.Add(period).Before(now)
+	return msgTime.Add(period).Before(now)
 }

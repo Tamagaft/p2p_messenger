@@ -19,6 +19,6 @@ func makeAddress(address string) Address {
 	return ret
 }
 
-func (address *Address) Get() string {
+func (address *Address) GetString() string {
 	return fmt.Sprintf("%s:%s", address.IPv4, address.Port)
 }

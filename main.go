@@ -58,9 +58,9 @@ func main() {
 				log.Print(node.GetConnectionsChat())
 				ShowMessage(node.GetConnections())
 			case "/a":
-				ShowMessage(node.Address.Get())
+				ShowMessage(node.Address.GetString())
 			case "/g":
-				ShowMessage(node.Address.Get())
+				ShowMessage(node.Address.GetString())
 			case "/h":
 				ShowMessage("/exit\n/cs\tconnect to server\n/jc\tjoin-chat\n/c\tshow connections\n/g\tshow address\n/help")
 			}
