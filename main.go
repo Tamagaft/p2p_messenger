@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -48,12 +49,21 @@ func main() {
 			splited := strings.Split(userInput, " ")
 			switch splited[0] {
 			case "/exit":
-				node.DisconnectionMessages()
+				node.SendDisconnectionMessages()
 				os.Exit(0)
 			case "/cs":
 				node.ConnectTo(splited[1:])
+			case "/lc":
+				ShowMessage(node.GetAllChats())
+				for id, e := range node.AllChats {
+					fmt.Printf("%s: %s\n", id, e.Users)
+				}
 			case "/jc":
-				node.JoinChat(splited[1:2])
+				if node.JoinChat(splited[1]) {
+					ShowMessage(fmt.Sprintf("Joined chat: %s", node.ActiveChat))
+				} else {
+					ShowMessage(fmt.Sprintf("Chat id %s not found", splited[1]))
+				}
 			case "/c":
 				log.Print(node.GetConnectionsChat())
 				ShowMessage(node.GetConnections())
@@ -61,12 +71,28 @@ func main() {
 				ShowMessage(node.Address.GetString())
 			case "/g":
 				ShowMessage(node.Address.GetString())
+			case "/cc":
+				chat, err := NewChat(splited[1])
+				if err != nil {
+					log.Println(err)
+					ShowMessage("Chat creation failed。")
+				}
+				_, ok := node.AllChats[chat.Id]
+				for ok {
+					chat.GenerateNewId()
+					_, ok = node.AllChats[chat.Id]
+				}
+				node.AllChats[chat.Id] = chat
+				ShowMessage(fmt.Sprintf("Chat created:\n%s: %s", chat.Id, chat.Name))
+				node.SendNewChat(chat)
+			case "/sn":
+				node.Nickname = strings.Join(splited[1:], " ")
 			case "/h":
 				ShowMessage("/exit\n/cs\tconnect to server\n/jc\tjoin-chat\n/c\tshow connections\n/g\tshow address\n/help")
 			}
 		} else {
 			text := userInput
-			ShowMessage(text)
+			ShowNamedMessage(node.Nickname, text)
 			node.SendMessageToChat(text)
 		}
 		input.SetText("")

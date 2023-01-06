@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/widget"
 )
@@ -13,4 +15,11 @@ func InitClient(msgBlock *fyne.Container) {
 
 func ShowMessage(text string) {
 	msgContainer.Add(widget.NewLabel(text))
+}
+
+func ShowNamedMessage(name, text string) {
+	if name == "" {
+		name = "anon"
+	}
+	msgContainer.Add(widget.NewLabel(fmt.Sprintf("%s:\n %s", name, text)))
 }
